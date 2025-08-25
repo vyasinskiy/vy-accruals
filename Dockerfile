@@ -31,7 +31,7 @@ RUN mkdir -p /var/log/vy-accruals && chown root:root /var/log/vy-accruals
 RUN npm run build
 
 # Открываем порт
-EXPOSE 3000
+EXPOSE 8080
 
 # Запускаем приложение
 CMD ["npm", "start"]
