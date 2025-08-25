@@ -3,7 +3,7 @@ name: Connect to EC2 (Test)
 on:
   push:
     branches:
-      - main
+      - test
   workflow_dispatch:
 
 jobs:

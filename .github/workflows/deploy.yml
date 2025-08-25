@@ -3,7 +3,7 @@ name: Deploy to EC2
 on:
   push:
     branches:
-      - main-disable
+      - main
   workflow_dispatch:
 
 jobs:
@@ -52,10 +52,16 @@ jobs:
         echo "PORT=${{ github.ref == 'refs/heads/main' && '3000' || '3001' }}" >> $GITHUB_ENV
         echo "ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}" >> $GITHUB_ENV
 
-    - name: Create SSH key file
+    - name: Create SSH key from base64
       run: |
-        echo "${{ vars.EC2_SSH_KEY }}" > deploy_key.pem
-        chmod 600 deploy_key.pem
+        mkdir -p ~/.ssh
+        chmod 700 ~/.ssh
+        echo "${{ vars.EC2_SSH_KEY_BASE64 }}" | base64 -d > ~/.ssh/deploy_key
+        chmod 600 ~/.ssh/deploy_key
+        
+        # Проверяем ключ
+        echo "SSH key info:"
+        ssh-keygen -l -f ~/.ssh/deploy_key || echo "Key format check completed"
 
     - name: Create .env file
       run: |
