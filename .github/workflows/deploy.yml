@@ -93,11 +93,11 @@ jobs:
 
     - name: Copy files to EC2
       run: |
-        scp -i deploy_key.pem -o StrictHostKeyChecking=no docker-compose.yml .env ${{ vars.EC2_USERNAME }}@${{ vars.EC2_HOST }}:~/
+        scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no docker-compose.yml .env ${{ vars.EC2_USERNAME }}@${{ vars.EC2_HOST }}:~/
 
     - name: Deploy on EC2
       run: |
-        ssh -i deploy_key.pem -o StrictHostKeyChecking=no ${{ vars.EC2_USERNAME }}@${{ vars.EC2_HOST }} << 'EOF'
+        ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ vars.EC2_USERNAME }}@${{ vars.EC2_HOST }} << 'EOF'
           export AWS_ACCESS_KEY_ID=${{ vars.AWS_ACCESS_KEY_ID }}
           export AWS_SECRET_ACCESS_KEY=${{ vars.AWS_SECRET_ACCESS_KEY }}
           export AWS_REGION=eu-north-1
@@ -128,4 +128,4 @@ jobs:
 
     - name: Cleanup
       run: |
-        rm deploy_key.pem docker-compose.yml .env
+        rm ~/.ssh/deploy_key docker-compose.yml .env
