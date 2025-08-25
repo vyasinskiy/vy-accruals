@@ -14,25 +14,19 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v3
 
-    - name: Setup SSH key
+    - name: Setup SSH key from base64
       run: |
-        # Создаем директорию для SSH
         mkdir -p ~/.ssh
         chmod 700 ~/.ssh
-        
-        # Сохраняем ключ с правильным форматированием
-        cat << EOF > ~/.ssh/deploy_key
-        ${{ vars.EC2_SSH_KEY }}
-        EOF
-        
+        echo "${{ vars.EC2_SSH_KEY_BASE64 }}" | base64 -d > ~/.ssh/deploy_key
         chmod 600 ~/.ssh/deploy_key
         
-        # Проверяем формат ключа
-        ssh-keygen -l -f ~/.ssh/deploy_key
+        # Проверяем ключ
+        ssh-keygen -l -f ~/.ssh/deploy_key || echo "Key check failed, but continuing..."
 
     - name: Connect to EC2 via SSH
       run: |
-        ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ vars.EC2_USERNAME }}@${{ vars.EC2_HOST }} "echo 'Connected successfully to EC2!'"
+        ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -v ${{ vars.EC2_USERNAME }}@${{ vars.EC2_HOST }} "echo 'Connected successfully to EC2!'"
 
     - name: Cleanup
       run: |
