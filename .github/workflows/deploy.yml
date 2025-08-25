@@ -82,7 +82,7 @@ jobs:
           app:
             image: ${ECR_REGISTRY}/vy-accruals:${IMAGE_TAG}
             ports:
-              - "3000:3000"
+              - "8080:8080"
             env_file:
               - .env
             volumes:
