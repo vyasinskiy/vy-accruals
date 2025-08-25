@@ -1,0 +1,148 @@
+name: Deploy to EC2
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: eu-north-1
+
+    - name: Create ECR repository if not exists
+      run: |
+        aws ecr describe-repositories --repository-names vy-accruals || \
+        aws ecr create-repository --repository-name vy-accruals
+
+    - name: Apply ECR lifecycle policy
+      run: |
+        aws ecr put-lifecycle-policy \
+          --repository-name vy-accruals \
+          --lifecycle-policy-text file://ecr-lifecycle-policy.json
+
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v1
+
+    - name: Build and push Docker image
+      env:
+        ECR_REPOSITORY: vy-accruals
+        IMAGE_TAG: ${{ github.ref == 'refs/heads/main' && 'production' || 'test' }}
+      run: |
+        docker build -t $ECR_REPOSITORY:$IMAGE_TAG .
+        docker tag $ECR_REPOSITORY:$IMAGE_TAG ${{ steps.login-ecr.outputs.registry }}/$ECR_REPOSITORY:$IMAGE_TAG
+        docker push ${{ steps.login-ecr.outputs.registry }}/$ECR_REPOSITORY:$IMAGE_TAG
+
+    - name: Prepare variables for deployment
+      id: vars
+      run: |
+        echo "IMAGE_TAG=${{ github.ref == 'refs/heads/main' && 'production' || 'test' }}" >> $GITHUB_ENV
+        echo "NODE_ENV=${{ github.ref == 'refs/heads/main' && 'production' || 'test' }}" >> $GITHUB_ENV
+        echo "PORT=${{ github.ref == 'refs/heads/main' && '3000' || '3001' }}" >> $GITHUB_ENV
+        echo "ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}" >> $GITHUB_ENV
+
+    - name: Create SSH key file
+      run: |
+        echo "${{ secrets.EC2_SSH_KEY }}" > deploy_key.pem
+        chmod 600 deploy_key.pem
+
+    - name: Create .env file
+      run: |
+        cat > .env <<EOF
+        NODE_ENV=${{ env.NODE_ENV }}
+        DATABASE_URL=${{ secrets.DATABASE_URL }}
+        API_AGENT_IDENTIFIER=${{ secrets.API_AGENT_IDENTIFIER }}
+        API_AGENT_KEY=${{ secrets.API_AGENT_KEY }}
+        GOOGLE_SHEET_ID=${{ vars.GOOGLE_SHEET_ID }}
+        GOOGLE_SHEET_NEW_SNAPSHOTS_ID=${{ vars.GOOGLE_SHEET_NEW_SNAPSHOTS_ID }}
+        GOOGLE_SERVICE_ACCOUNT_KEY_B64=${{ secrets.GOOGLE_SERVICE_ACCOUNT_KEY_B64 }}
+        TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}
+        TELEGRAM_CHAT_ID_RU=${{ vars.TELEGRAM_CHAT_ID_RU }}
+        TELEGRAM_CHAT_ID_EN=${{ vars.TELEGRAM_CHAT_ID_EN }}
+        TELEGRAM_CHAT_RU_INVITE_LINK=${{ vars.TELEGRAM_CHAT_RU_INVITE_LINK }}
+        TELEGRAM_CHAT_EN_INVITE_LINK=${{ vars.TELEGRAM_CHAT_EN_INVITE_LINK }}
+        TELEGRAM_AGENT_USERNAME_LINK_EN=${{ vars.TELEGRAM_AGENT_USERNAME_LINK_EN }}
+        TELEGRAM_AGENT_USERNAME_LINK_RU=${{ vars.TELEGRAM_AGENT_USERNAME_LINK_RU }}
+        TELEGRAPH_ACCESS_TOKEN=${{ secrets.TELEGRAPH_ACCESS_TOKEN }}
+        TELEGRAM_POST_DELAY=${{ vars.TELEGRAM_POST_DELAY }}
+        TELEGRAM_CRM_BOT_LINK=${{ vars.TELEGRAM_CRM_BOT_LINK }}
+        TELEGRAM_DEVELOPER_LINK=${{ vars.TELEGRAM_DEVELOPER_LINK }}
+        AMOCRM_ACCESS_TOKEN=${{ vars.AMOCRM_ACCESS_TOKEN }}
+        EOF
+
+    # устаналиваем только ради тестов
+    - name: Install dependencies
+      run: npm ci
+      env:
+        NODE_ENV: development
+
+    # - name: Run tests
+    #   run: npm test
+    #   env:
+    #     NODE_ENV: development
+
+    - name: Create docker-compose.yml
+      run: |
+        cat > docker-compose.yml <<EOF
+        version: '3.8'
+        services:
+          app:
+            image: ${ECR_REGISTRY}/vy-accruals:${IMAGE_TAG}
+            ports:
+              - "3000:3000"
+            env_file:
+              - .env
+            volumes:
+              - /var/log/vy-accruals:/var/log/vy-accruals
+            restart: always
+        EOF
+
+    - name: Copy files to EC2
+      run: |
+        scp -i deploy_key.pem -o StrictHostKeyChecking=no docker-compose.yml .env ${{ vars.EC2_USERNAME }}@${{ vars.EC2_HOST }}:~/
+
+    - name: Deploy on EC2
+      run: |
+        ssh -i deploy_key.pem -o StrictHostKeyChecking=no ${{ vars.EC2_USERNAME }}@${{ vars.EC2_HOST }} << 'EOF'
+          export AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}
+          export AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          export AWS_REGION=eu-north-1
+          export ECR_REGISTRY=${{ env.ECR_REGISTRY }}
+          export IMAGE_TAG=${{ env.IMAGE_TAG }}
+          cd ~
+          aws ecr get-login-password --region eu-north-1 | docker login --username AWS --password-stdin $ECR_REGISTRY
+          docker-compose pull
+          docker-compose up -d
+          sleep 5
+
+          # Получаем имя контейнера (например, vy-accruals-app-1)
+          CONTAINER_ID=$(docker-compose ps -q app)
+
+          # Проверим статус контейнера
+          STATUS=$(docker inspect --format='{{.State.Status}}' "$CONTAINER_ID")
+
+          if [ "$STATUS" != "running" ]; then
+            echo "❌ Контейнер завершился со статусом '$STATUS'"
+            docker logs "$CONTAINER_ID"
+            exit 1
+          fi
+
+          # Выполнить миграции
+          docker exec "$CONTAINER_ID" npx prisma migrate deploy
+          docker system prune -af --volumes
+        EOF
+
+    - name: Cleanup
+      run: |
+        rm deploy_key.pem docker-compose.yml .env
