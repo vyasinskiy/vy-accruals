@@ -18,7 +18,7 @@ jobs:
       with:
         aws-access-key-id: ${{ vars.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ vars.AWS_SECRET_ACCESS_KEY }}
-        aws-region: eu-north-1
+        aws-region: ${{ vars.AWS_REGION }}
 
     - name: Create ECR repository if not exists
       run: |
@@ -63,24 +63,11 @@ jobs:
         NODE_ENV=${{ vars.NODE_ENV }}
         DATABASE_URL=${{ vars.DATABASE_URL }}
         PORT=${{ vars.PORT }}
-        AWS_ACCESS_KEY_ID=${{ vars.AWS_ACCESS_KEY_ID }}
-        AWS_SECRET_ACCESS_KEY=${{ vars.AWS_SECRET_ACCESS_KEY }}
         AWS_REGION=${{ vars.AWS_REGION }}
         S3_BUCKET=${{ vars.S3_BUCKET }}
         TELEGRAM_BOT_TOKEN=${{ vars.TELEGRAM_BOT_TOKEN }}
         TELEGRAM_CHANNEL_ID=${{ vars.TELEGRAM_CHANNEL_ID }}
         EOF
-
-    # устаналиваем только ради тестов
-    - name: Install dependencies
-      run: npm ci
-      env:
-        NODE_ENV: development
-
-    # - name: Run tests
-    #   run: npm test
-    #   env:
-    #     NODE_ENV: development
 
     - name: Create docker-compose.yml
       run: |
