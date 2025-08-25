@@ -33,7 +33,9 @@ jobs:
 
     - name: Login to Amazon ECR
       id: login-ecr
-      uses: aws-actions/amazon-ecr-login@v1
+      run: |
+        aws ecr get-login-password --region ${{ vars.AWS_REGION }} | docker login --username AWS --password-stdin ${{ steps.login-ecr.outputs.registry }}
+
 
     - name: Build and push Docker image
       env:
@@ -78,7 +80,6 @@ jobs:
     - name: Create docker-compose.yml
       run: |
         cat > docker-compose.yml <<EOF
-        version: '3.8'
         services:
           app:
             image: ${ECR_REGISTRY}/vy-accruals:${IMAGE_TAG}
@@ -100,7 +101,7 @@ jobs:
         ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ vars.EC2_USERNAME }}@${{ vars.EC2_HOST }} << 'EOF'
           export AWS_ACCESS_KEY_ID=${{ vars.AWS_ACCESS_KEY_ID }}
           export AWS_SECRET_ACCESS_KEY=${{ vars.AWS_SECRET_ACCESS_KEY }}
-          export AWS_REGION=eu-north-1
+          export AWS_REGION=${{ vars.AWS_REGION }}
           export ECR_REGISTRY=${{ env.ECR_REGISTRY }}
           export IMAGE_TAG=${{ env.IMAGE_TAG }}
           cd ~
