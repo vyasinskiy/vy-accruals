@@ -16,14 +16,24 @@ jobs:
 
     - name: Setup SSH key
       run: |
-        echo "${{ vars.EC2_SSH_KEY }}" > deploy_key.pem
-        chmod 600 deploy_key.pem
-        cat deploy_key.pem
+        # Создаем директорию для SSH
+        mkdir -p ~/.ssh
+        chmod 700 ~/.ssh
+        
+        # Сохраняем ключ с правильным форматированием
+        cat << EOF > ~/.ssh/deploy_key
+        ${{ vars.EC2_SSH_KEY }}
+        EOF
+        
+        chmod 600 ~/.ssh/deploy_key
+        
+        # Проверяем формат ключа
+        ssh-keygen -l -f ~/.ssh/deploy_key
 
     - name: Connect to EC2 via SSH
       run: |
-        ssh -i deploy_key.pem -o StrictHostKeyChecking=no ${{ vars.EC2_USERNAME }}@${{ vars.EC2_HOST }} "echo 'Connected successfully to EC2!'"
-      
+        ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ vars.EC2_USERNAME }}@${{ vars.EC2_HOST }} "echo 'Connected successfully to EC2!'"
+
     - name: Cleanup
       run: |
-        rm deploy_key.pem
+        rm -f ~/.ssh/deploy_key
