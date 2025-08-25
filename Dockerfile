@@ -4,7 +4,7 @@ FROM node:18-alpine
 # Устанавливаем OpenSSL и другие зависимости для Prisma
 RUN apk update && apk add --no-cache \
     openssl \
-    libssl1.1 \
+    libssl-dev \
     bash \
     && rm -rf /var/cache/apk/*
 
