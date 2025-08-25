@@ -1,11 +1,11 @@
 # Используем Node.js 18 как базовый образ
 FROM node:18-alpine
 
-# Устанавливаем OpenSSL и другие зависимости для Prisma
+# Устанавливаем OpenSSL (libressl) и другие зависимости для Prisma
 RUN apk update && apk add --no-cache \
     openssl \
-    libssl-dev \
     bash \
+    libressl \
     && rm -rf /var/cache/apk/*
 
 # Создаем рабочую директорию
