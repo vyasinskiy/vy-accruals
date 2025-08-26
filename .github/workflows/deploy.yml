@@ -73,6 +73,8 @@ jobs:
         S3_BUCKET=${{ vars.S3_BUCKET }}
         TELEGRAM_BOT_TOKEN=${{ vars.TELEGRAM_BOT_TOKEN }}
         TELEGRAM_CHANNEL_ID=${{ vars.TELEGRAM_CHANNEL_ID }}
+        AWS_ACCESS_KEY_ID=${{ vars.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY=${{ vars.AWS_SECRET_ACCESS_KEY }}
         EOF
 
     - name: Create docker-compose.yml
